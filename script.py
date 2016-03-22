@@ -30,7 +30,7 @@ def calc_cpu_perc(instance_uuid, cpu_time):
     prevT, prevCpuTime = read_cpu_time(instance_uuid)
     write_cpu_time(instance_uuid, cpu_time)
 
-    return (curCpuTime - prevCpuTime) / ((curT - prevT) * 100000000)
+    return (curCpuTime - prevCpuTime) / ((curT - prevT) * 10000000)
 
 
 conn = libvirt.openReadOnly("qemu:///system")
