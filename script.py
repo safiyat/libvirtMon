@@ -112,7 +112,7 @@ def calc_interface_stats(instance_uuid, interface, t, stats):
     return change
 
 
-conn = libvirt.openReadOnly("qemu:///system")
+conn = libvirt.openReadOnly('qemu:///system')
 namespaces = {'nova':'http://openstack.org/xmlns/libvirt/nova/1.0'}
 
 stats_all = {}
@@ -177,3 +177,28 @@ for instance in conn.listAllDomains():
     inst['interface_stats'] = stats
 
     stats_all[uuid] = inst
+
+
+output = ''
+
+for uuid, instance in stats_all.items():
+    output += '\n%s <%s, %s, %s>\n' % (instance['uuid'], instance['name'],
+                                     instance['owner'], instance['project'])
+    output += '\tCPU: %.2f %%\n' % instance['cpu_stats']
+    output += '\tMemory: %.2f %% (%.2f of %d GB)\n' % (instance['memory_stats'][
+        'percentage'], instance['memory_stats']['used'] / (10**20), instance[
+            'memory_stats']['total'] / (10**20))
+
+    output += '\tDISK:\n'
+    for disk_name, disk in instance['disk_stats'].items():
+        output += '\t  %s: %.2f IOPS, %.2f kB/s (read), %.2f kB/s (write)\n' % (
+            disk_name, (disk['read_ops'] + disk['write_ops']) / (disk['time']),
+            disk['read_bytes'] / (1024 * disk['time']), disk['write_bytes'] / (
+                1024 * disk['time']))
+
+    output += '\tINTERFACE:\n'
+    for interface_name, interface in instance['interface_stats'].items():
+        output += '\t  %s: %.2f kB/s, %.2f pkts/s (read), %.2f pkts/s (write)\n' % (
+            interface_name, (interface['rx_bytes'] + interface['tx_bytes']) / (
+                interface['time']), interface['rx_packets'] / interface['time'],
+            interface['tx_packets'] / interface['time'])
