@@ -252,8 +252,9 @@ for instance in conn.listAllDomains():
     stats_all[uuid] = inst
 
 
-output = 'Number of Instances: %d\n' % len(stats_all)
-
+firstLine = 'Number of Instances: %d' % len(stats_all)
+output = ''
+graphite = ''
 for uuid, instance in stats_all.items():
     output += '\n%s (%s, %s, %s)\n' % (instance['uuid'], instance['name'],
                                      instance['owner'], instance['project'])
@@ -262,22 +263,32 @@ for uuid, instance in stats_all.items():
     if instance['state'] != 1:
         continue
     output += '\tCPU: %.2f %%    VCPUs: %s\n' % (instance['cpu_stats'], instance['vcpus'])
+    graphite += 'CPU - %s=%.2f;90;95;0;100 ' % (instance['name'], instance['cpu_stats'])
+
     output += '\tMemory: %.2f %% (%.2f GB of %.0f GB)\n' % (instance['memory_stats'][
         'percentage'], instance['memory_stats']['used'] / 1048576.0, instance[
             'memory_stats']['total'] / 1048576.0)
+    graphite += 'Memory - %s=%.2f;90;95;0;100 ' % (instance['name'], instance['memory_stats']['percentage'])
 
     output += '\tDISK:\n'
+    iops_cons = 0
     for disk_name, disk in instance['disk_stats'].items():
+        iops = (disk['read_ops'] + disk['write_ops']) / (disk['time'])
+        iops_cons += iops
         output += '\t  %s: %.2f IOPS, %.2f kB/s (read), %.2f kB/s (write)\n' % (
             disk_name, (disk['read_ops'] + disk['write_ops']) / (disk['time']),
             disk['read_bytes'] / (1024.0 * disk['time']), disk['write_bytes'] / (
                 1024.0 * disk['time']))
+    graphite += 'Disk - %s=%.2f;;;; ' % (instance['name'], iops_cons)
 
     output += '\tINTERFACE:\n'
+    kbps_cons = 0
     for interface_name, interface in instance['interface_stats'].items():
+        kbps = (interface['rx_bytes'] + interface['tx_bytes']) / (interface['time'] * 1024.0)
+        kbps_cons += kbps
         output += '\t  %s: %.2f kB/s, %.2f pkts/s (read), %.2f pkts/s (write)\n' % (
-            interface_name, (interface['rx_bytes'] + interface['tx_bytes']) / (
-                interface['time'] * 1024.0), interface['rx_packets'] / interface['time'],
+            interface_name, kbps, interface['rx_packets'] / interface['time'],
             interface['tx_packets'] / interface['time'])
+    graphite += 'Interface - %s=%.2f;;;; ' % (instance['name'], kbps_cons)
 
-print output
+print firstLine + ' | ' + graphite + output
