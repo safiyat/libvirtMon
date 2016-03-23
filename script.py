@@ -1,9 +1,78 @@
-# https://libvirt.org/html/libvirt-libvirt-domain.html
+#! /usr/bin/env python
+
+# Reference: https://libvirt.org/html/libvirt-libvirt-domain.html
+#
+# Author: Md Safiyat Reza <md.reza@snapdeal.com>
 
 import libvirt
 import os
 import time
 from xml.etree import ElementTree as etree
+
+domainstate = {}
+domainstate['0'] = 'NOSTATE'
+domainstate['1'] = 'RUNNING'
+domainstate['2'] = 'BLOCKED'
+domainstate['3'] = 'PAUSED'
+domainstate['4'] = 'SHUTDOWN'
+domainstate['5'] = 'SHUTOFF'
+domainstate['6'] = 'CRASHED'
+domainstate['7'] = 'PMSUSPENDED'
+domainstate['8'] = 'LAST'
+domainstate['NOSTATE'] = {}
+domainstate['RUNNING'] = {}
+domainstate['BLOCKED'] = {}
+domainstate['PAUSED'] = {}
+domainstate['SHUTDOWN'] = {}
+domainstate['SHUTOFF'] = {}
+domainstate['CRASHED'] = {}
+domainstate['PMSUSPENDED'] = {}
+domainstate['LAST'] = {}
+domainstate['NOSTATE']['0'] = 'UNKNOWN'
+domainstate['NOSTATE']['1'] = 'LAST'
+domainstate['RUNNING']['0'] = 'UNKNOWN'
+domainstate['RUNNING']['1'] = 'BOOTED'
+domainstate['RUNNING']['2'] = 'MIGRATED'
+domainstate['RUNNING']['3'] = 'RESTORED'
+domainstate['RUNNING']['4'] = 'FROM_SNAPSHOT'
+domainstate['RUNNING']['5'] = 'UNPAUSED'
+domainstate['RUNNING']['6'] = 'MIGRATION_CANCELLED'
+domainstate['RUNNING']['7'] = 'SAVE_CANCELLED'
+domainstate['RUNNING']['8'] = 'WAKEUP'
+domainstate['RUNNING']['9'] = 'CRASHED'
+domainstate['RUNNING']['10'] = 'LAST'
+domainstate['BLOCKED']['0'] = 'UNKNOWN'
+domainstate['BLOCKED']['1'] = 'LAST'
+domainstate['PAUSED']['0'] = 'UNKNOWN'
+domainstate['PAUSED']['1'] = 'USER'
+domainstate['PAUSED']['2'] = 'MIGRATION'
+domainstate['PAUSED']['3'] = 'SAVE'
+domainstate['PAUSED']['4'] = 'DUMP'
+domainstate['PAUSED']['5'] = 'IOERROR'
+domainstate['PAUSED']['6'] = 'WATCHDOG'
+domainstate['PAUSED']['7'] = 'FROM_SNAPSHOT'
+domainstate['PAUSED']['8'] = 'SHUTTING_DOWN'
+domainstate['PAUSED']['9'] = 'SNAPSHOT'
+domainstate['PAUSED']['10'] = 'CRASHED'
+domainstate['PAUSED']['11'] = 'STARTING_UP'
+domainstate['PAUSED']['12'] = 'LAST'
+domainstate['SHUTDOWN']['0'] = 'UNKNOWN'
+domainstate['SHUTDOWN']['1'] = 'USER'
+domainstate['SHUTDOWN']['2'] = 'LAST'
+domainstate['SHUTOFF']['0'] = 'UNKNOWN'
+domainstate['SHUTOFF']['1'] = 'SHUTDOWN'
+domainstate['SHUTOFF']['2'] = 'DESTROYED'
+domainstate['SHUTOFF']['3'] = 'CRASHED'
+domainstate['SHUTOFF']['4'] = 'MIGRATED'
+domainstate['SHUTOFF']['5'] = 'SAVED'
+domainstate['SHUTOFF']['6'] = 'FAILED'
+domainstate['SHUTOFF']['7'] = 'FROM_SNAPSHOT'
+domainstate['SHUTOFF']['8'] = 'LAST'
+domainstate['CRASHED']['0'] = 'UNKNOWN'
+domainstate['CRASHED']['1'] = 'PANICKED'
+domainstate['CRASHED']['2'] = 'LAST'
+domainstate['PMSUSPENDED']['0'] = 'UNKNOWN'
+domainstate['PMSUSPENDED']['1'] = 'LAST'
 
 def read_cpu_time(instance_uuid):
     fp = open('/tmp/%s-cpu' % instance_uuid, 'r')
@@ -143,7 +212,6 @@ for instance in conn.listAllDomains():
     inst['project'] = xml_data.find('metadata/nova:instance/nova:owner/nova:project',
                             namespaces=namespaces).text
 
-    # https://libvirt.org/html/libvirt-libvirt-domain.html#virDomainState
     state, reason = instance.state()
     inst['state'] = state
     inst['reason'] = reason
