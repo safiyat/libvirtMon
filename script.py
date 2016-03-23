@@ -261,7 +261,7 @@ for uuid, instance in stats_all.items():
                                               domainstate[domainstate[str(instance['state'])]][str(instance['reason'])])
     if instance['state'] != 1:
         continue
-    output += '\tCPU: %.2f %%\n' % instance['cpu_stats']
+    output += '\tCPU: %.2f %%    VCPUs: %s\n' % (instance['cpu_stats'], instance['vcpus'])
     output += '\tMemory: %.2f %% (%.2f GB of %.0f GB)\n' % (instance['memory_stats'][
         'percentage'], instance['memory_stats']['used'] / 1048576.0, instance[
             'memory_stats']['total'] / 1048576.0)
