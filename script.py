@@ -216,6 +216,7 @@ for instance in conn.listAllDomains():
     inst['state'] = state
     inst['reason'] = reason
     if state != 1:
+        stats_all[uuid] = inst
         continue
 
     cpu_perc = calc_cpu_perc(uuid, instance.getCPUStats(1)[0]['cpu_time'],
@@ -252,6 +253,10 @@ output = ''
 for uuid, instance in stats_all.items():
     output += '\n%s <%s, %s, %s>\n' % (instance['uuid'], instance['name'],
                                      instance['owner'], instance['project'])
+    output += '\tState: %s    Reason: %s\n' % (domainstate[str(instance['state'])],
+                                              domainstate[domainstate[str(instance['state'])]][str(instance['reason'])])
+    if instance['state'] != 1:
+        continue
     output += '\tCPU: %.2f %%\n' % instance['cpu_stats']
     output += '\tMemory: %.2f %% (%.2f of %d GB)\n' % (instance['memory_stats'][
         'percentage'], instance['memory_stats']['used'] / (10**20), instance[
