@@ -258,20 +258,22 @@ for uuid, instance in stats_all.items():
     if instance['state'] != 1:
         continue
     output += '\tCPU: %.2f %%\n' % instance['cpu_stats']
-    output += '\tMemory: %.2f %% (%.2f of %d GB)\n' % (instance['memory_stats'][
-        'percentage'], instance['memory_stats']['used'] / (10**20), instance[
-            'memory_stats']['total'] / (10**20))
+    output += '\tMemory: %.2f %% (%.2f of %.0f GB)\n' % (instance['memory_stats'][
+        'percentage'], instance['memory_stats']['used'] / 1048576.0, instance[
+            'memory_stats']['total'] / 1048576.0)
 
     output += '\tDISK:\n'
     for disk_name, disk in instance['disk_stats'].items():
         output += '\t  %s: %.2f IOPS, %.2f kB/s (read), %.2f kB/s (write)\n' % (
             disk_name, (disk['read_ops'] + disk['write_ops']) / (disk['time']),
-            disk['read_bytes'] / (1024 * disk['time']), disk['write_bytes'] / (
-                1024 * disk['time']))
+            disk['read_bytes'] / (1024.0 * disk['time']), disk['write_bytes'] / (
+                1024.0 * disk['time']))
 
     output += '\tINTERFACE:\n'
     for interface_name, interface in instance['interface_stats'].items():
         output += '\t  %s: %.2f kB/s, %.2f pkts/s (read), %.2f pkts/s (write)\n' % (
             interface_name, (interface['rx_bytes'] + interface['tx_bytes']) / (
-                interface['time']), interface['rx_packets'] / interface['time'],
+                interface['time'] * 1024.0), interface['rx_packets'] / interface['time'],
             interface['tx_packets'] / interface['time'])
+
+print output
