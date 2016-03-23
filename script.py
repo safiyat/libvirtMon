@@ -225,8 +225,12 @@ for instance in conn.listAllDomains():
 
     inst_mem = instance.memoryStats()
     stats = {}
-    stats['total'] = int(inst_mem['available'])
-    stats['free'] = int(inst_mem['unused'])
+    if 'available' in inst_mem:
+        stats['total'] = int(inst_mem['available'])
+        stats['free'] = int(inst_mem['unused'])
+    else:
+        stats['total'] = -1
+        stats['free'] = -1
     stats['used'] = stats['total'] - stats['free']
     stats['percentage'] = stats['used'] * 100.0 / stats['total']
     inst['memory_stats'] = stats
@@ -248,17 +252,17 @@ for instance in conn.listAllDomains():
     stats_all[uuid] = inst
 
 
-output = ''
+output = 'Number of Instances: %d\n' % len(stats_all)
 
 for uuid, instance in stats_all.items():
-    output += '\n%s <%s, %s, %s>\n' % (instance['uuid'], instance['name'],
+    output += '\n%s (%s, %s, %s)\n' % (instance['uuid'], instance['name'],
                                      instance['owner'], instance['project'])
     output += '\tState: %s    Reason: %s\n' % (domainstate[str(instance['state'])],
                                               domainstate[domainstate[str(instance['state'])]][str(instance['reason'])])
     if instance['state'] != 1:
         continue
     output += '\tCPU: %.2f %%\n' % instance['cpu_stats']
-    output += '\tMemory: %.2f %% (%.2f of %.0f GB)\n' % (instance['memory_stats'][
+    output += '\tMemory: %.2f %% (%.2f GB of %.0f GB)\n' % (instance['memory_stats'][
         'percentage'], instance['memory_stats']['used'] / 1048576.0, instance[
             'memory_stats']['total'] / 1048576.0)
 
