@@ -115,44 +115,44 @@ def calc_interface_stats(instance_uuid, interface, t, stats):
 conn = libvirt.openReadOnly("qemu:///system")
 namespaces = {'nova':'http://openstack.org/xmlns/libvirt/nova/1.0'}
 
-cpu_stats = {}
-memory_stats = {}
-disk_stats = {}
-interface_stats = {}
-
+stats_all = {}
 
 for instance in conn.listAllDomains():
+    inst = {}
     xml_data = etree.fromstring(instance.XMLDesc())
     uuid = xml_data.find('uuid').text
-    name = xml_data.find('metadata/nova:instance/nova:name',
+
+    inst['uuid'] = uuid
+    inst['name'] = xml_data.find('metadata/nova:instance/nova:name',
                          namespaces=namespaces).text
-    flavor = xml_data.find('metadata/nova:instance/nova:flavor',
+    inst['flavor'] = xml_data.find('metadata/nova:instance/nova:flavor',
                            namespaces=namespaces).attrib['name']
-    memory = xml_data.find('metadata/nova:instance/nova:flavor/nova:memory',
+    inst['memory'] = xml_data.find('metadata/nova:instance/nova:flavor/nova:memory',
                            namespaces=namespaces).text
-    disk = xml_data.find('metadata/nova:instance/nova:flavor/nova:disk',
+    inst['disk'] = xml_data.find('metadata/nova:instance/nova:flavor/nova:disk',
                          namespaces=namespaces).text
-    swap = xml_data.find('metadata/nova:instance/nova:flavor/nova:swap',
+    inst['swap'] = xml_data.find('metadata/nova:instance/nova:flavor/nova:swap',
                          namespaces=namespaces).text
-    ephemeral = xml_data.find(
+    inst['ephemeral'] = xml_data.find(
         'metadata/nova:instance/nova:flavor/nova:ephemeral',
         namespaces=namespaces).text
-    vcpus = xml_data.find('metadata/nova:instance/nova:flavor/nova:vcpus',
+    inst['vcpus'] = xml_data.find('metadata/nova:instance/nova:flavor/nova:vcpus',
                           namespaces=namespaces).text
-    owner = xml_data.find('metadata/nova:instance/nova:owner/nova:user',
+    inst['owner'] = xml_data.find('metadata/nova:instance/nova:owner/nova:user',
                           namespaces=namespaces).text
-    project = xml_data.find('metadata/nova:instance/nova:owner/nova:project',
+    inst['project'] = xml_data.find('metadata/nova:instance/nova:owner/nova:project',
                             namespaces=namespaces).text
 
     # https://libvirt.org/html/libvirt-libvirt-domain.html#virDomainState
     state, reason = instance.state()
-
+    inst['state'] = state
+    inst['reason'] = reason
     if state != 1:
         continue
 
     cpu_perc = calc_cpu_perc(uuid, instance.getCPUStats(1)[0]['cpu_time'],
-                             time.time()) / int(vcpus)
-    cpu_stats[uuid] = cpu_perc
+                             time.time()) / int(inst['vcpus'])
+    inst['cpu_stats'] = cpu_perc
 
     inst_mem = instance.memoryStats()
     stats = {}
@@ -160,16 +160,20 @@ for instance in conn.listAllDomains():
     stats['free'] = int(inst_mem['unused'])
     stats['used'] = stats['total'] - stats['free']
     stats['percentage'] = stats['used'] * 100.0 / stats['total']
-    memory_stats[uuid] = stats
+    inst['memory_stats'] = stats
 
+    stats = {}
     for disk in xml_data.findall('devices/disk', namespaces=namespaces):
         device = disk.find('target').attrib['dev']
-        stats = calc_block_stats(uuid, device, time.time(),
+        stats[device] = calc_block_stats(uuid, device, time.time(),
                                  instance.blockStats(device))
-        disk_stats['%s-%s' % (uuid, device)] = stats
+    inst['disk_stats'] = stats
 
+    stats = {}
     for interface in xml_data.findall('devices/interface', namespaces=namespaces):
         device = interface.find('target').attrib['dev']
-        stats = calc_interface_stats(instance.UUIDString(), device, time.time(),
+        stats[device] = calc_interface_stats(instance.UUIDString(), device, time.time(),
                                      instance.interfaceStats(device))
-        interface_stats['%s-%s' % (uuid, device)] = stats
+    inst['interface_stats'] = stats
+
+    stats_all[uuid] = inst
