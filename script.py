@@ -6,6 +6,7 @@
 
 import libvirt
 import os
+import sys
 import time
 from xml.etree import ElementTree as etree
 
@@ -187,123 +188,128 @@ def calc_interface_stats(instance_uuid, interface, t, stats):
     return change
 
 
-conn = libvirt.openReadOnly('qemu:///system')
-namespaces = {'nova':'http://openstack.org/xmlns/libvirt/nova/1.0'}
+def main():
+    conn = libvirt.openReadOnly('qemu:///system')
+    namespaces = {'nova':'http://openstack.org/xmlns/libvirt/nova/1.0'}
 
-stats_all = {}
+    stats_all = {}
 
-for instance in conn.listAllDomains():
-    inst = {}
-    xml_data = etree.fromstring(instance.XMLDesc())
-    uuid = xml_data.find('uuid').text
+    for instance in conn.listAllDomains():
+        inst = {}
+        xml_data = etree.fromstring(instance.XMLDesc())
+        uuid = xml_data.find('uuid').text
 
-    inst['uuid'] = uuid
-    inst['name'] = xml_data.find('metadata/nova:instance/nova:name',
-                         namespaces=namespaces).text
-    inst['flavor'] = xml_data.find('metadata/nova:instance/nova:flavor',
-                           namespaces=namespaces).attrib['name']
-    inst['memory'] = xml_data.find('metadata/nova:instance/nova:flavor/nova:memory',
-                           namespaces=namespaces).text
-    inst['disk'] = xml_data.find('metadata/nova:instance/nova:flavor/nova:disk',
-                         namespaces=namespaces).text
-    inst['swap'] = xml_data.find('metadata/nova:instance/nova:flavor/nova:swap',
-                         namespaces=namespaces).text
-    inst['ephemeral'] = xml_data.find(
-        'metadata/nova:instance/nova:flavor/nova:ephemeral',
-        namespaces=namespaces).text
-    inst['vcpus'] = xml_data.find('metadata/nova:instance/nova:flavor/nova:vcpus',
-                          namespaces=namespaces).text
-    inst['owner'] = xml_data.find('metadata/nova:instance/nova:owner/nova:user',
-                          namespaces=namespaces).text
-    inst['project'] = xml_data.find('metadata/nova:instance/nova:owner/nova:project',
-                            namespaces=namespaces).text
+        inst['uuid'] = uuid
+        inst['name'] = xml_data.find('metadata/nova:instance/nova:name',
+                             namespaces=namespaces).text
+        inst['flavor'] = xml_data.find('metadata/nova:instance/nova:flavor',
+                               namespaces=namespaces).attrib['name']
+        inst['memory'] = xml_data.find('metadata/nova:instance/nova:flavor/nova:memory',
+                               namespaces=namespaces).text
+        inst['disk'] = xml_data.find('metadata/nova:instance/nova:flavor/nova:disk',
+                             namespaces=namespaces).text
+        inst['swap'] = xml_data.find('metadata/nova:instance/nova:flavor/nova:swap',
+                             namespaces=namespaces).text
+        inst['ephemeral'] = xml_data.find(
+            'metadata/nova:instance/nova:flavor/nova:ephemeral',
+            namespaces=namespaces).text
+        inst['vcpus'] = xml_data.find('metadata/nova:instance/nova:flavor/nova:vcpus',
+                              namespaces=namespaces).text
+        inst['owner'] = xml_data.find('metadata/nova:instance/nova:owner/nova:user',
+                              namespaces=namespaces).text
+        inst['project'] = xml_data.find('metadata/nova:instance/nova:owner/nova:project',
+                                namespaces=namespaces).text
 
-    state, reason = instance.state()
-    inst['state'] = state
-    inst['reason'] = reason
-    if state != 1:
+        state, reason = instance.state()
+        inst['state'] = state
+        inst['reason'] = reason
+        if state != 1:
+            stats_all[uuid] = inst
+            continue
+
+        cpu_perc = calc_cpu_perc(uuid, instance.getCPUStats(1)[0]['cpu_time'],
+                                 time.time()) / int(inst['vcpus'])
+        inst['cpu_stats'] = cpu_perc
+
+        inst_mem = instance.memoryStats()
+        stats = {}
+        if 'available' in inst_mem:
+            stats['total'] = int(inst_mem['available'])
+            stats['free'] = int(inst_mem['unused'])
+        else:
+            stats['total'] = -1
+            stats['free'] = -1
+        stats['used'] = stats['total'] - stats['free']
+        stats['percentage'] = stats['used'] * 100.0 / stats['total']
+        inst['memory_stats'] = stats
+
+        stats = {}
+        for disk in xml_data.findall('devices/disk', namespaces=namespaces):
+            device = disk.find('target').attrib['dev']
+            stats[device] = calc_block_stats(uuid, device, time.time(),
+                                     instance.blockStats(device))
+        inst['disk_stats'] = stats
+
+        stats = {}
+        for interface in xml_data.findall('devices/interface', namespaces=namespaces):
+            device = interface.find('target').attrib['dev']
+            stats[device] = calc_interface_stats(instance.UUIDString(), device, time.time(),
+                                         instance.interfaceStats(device))
+        inst['interface_stats'] = stats
+
         stats_all[uuid] = inst
-        continue
-
-    cpu_perc = calc_cpu_perc(uuid, instance.getCPUStats(1)[0]['cpu_time'],
-                             time.time()) / int(inst['vcpus'])
-    inst['cpu_stats'] = cpu_perc
-
-    inst_mem = instance.memoryStats()
-    stats = {}
-    if 'available' in inst_mem:
-        stats['total'] = int(inst_mem['available'])
-        stats['free'] = int(inst_mem['unused'])
-    else:
-        stats['total'] = -1
-        stats['free'] = -1
-    stats['used'] = stats['total'] - stats['free']
-    stats['percentage'] = stats['used'] * 100.0 / stats['total']
-    inst['memory_stats'] = stats
-
-    stats = {}
-    for disk in xml_data.findall('devices/disk', namespaces=namespaces):
-        device = disk.find('target').attrib['dev']
-        stats[device] = calc_block_stats(uuid, device, time.time(),
-                                 instance.blockStats(device))
-    inst['disk_stats'] = stats
-
-    stats = {}
-    for interface in xml_data.findall('devices/interface', namespaces=namespaces):
-        device = interface.find('target').attrib['dev']
-        stats[device] = calc_interface_stats(instance.UUIDString(), device, time.time(),
-                                     instance.interfaceStats(device))
-    inst['interface_stats'] = stats
-
-    stats_all[uuid] = inst
 
 
-instance_count = len(stats_all)
-instance_running_count = 0
-firstLine = 'Number of Instances: %d' % instance_count
-output = ''
-graphite = ''
-for uuid, instance in stats_all.items():
-    output += '\n%s (%s, %s, %s)\n' % (instance['uuid'], instance['name'],
-                                     instance['owner'], instance['project'])
-    output += '\tState: %s    Reason: %s\n' % (domainstate[str(instance['state'])],
-                                              domainstate[domainstate[str(instance['state'])]][str(instance['reason'])])
-    if instance['state'] != 1:
-        continue
-    instance_running_count += 1
-    output += '\tCPU: %.2f %%    VCPUs: %s\n' % (instance['cpu_stats'], instance['vcpus'])
-    graphite += 'CPU - %s=%.2f;90;95;0;100 ' % (instance['name'], instance['cpu_stats'])
+    instance_count = len(stats_all)
+    instance_running_count = 0
+    firstLine = 'Number of Instances: %d' % instance_count
+    output = ''
+    graphite = ''
+    for uuid, instance in stats_all.items():
+        output += '\n%s (%s, %s, %s)\n' % (instance['uuid'], instance['name'],
+                                         instance['owner'], instance['project'])
+        output += '\tState: %s    Reason: %s\n' % (domainstate[str(instance['state'])],
+                                                  domainstate[domainstate[str(instance['state'])]][str(instance['reason'])])
+        if instance['state'] != 1:
+            continue
+        instance_running_count += 1
+        output += '\tCPU: %.2f %%    VCPUs: %s\n' % (instance['cpu_stats'], instance['vcpus'])
+        graphite += 'CPU - %s=%.2f;90;95;0;100 ' % (instance['name'], instance['cpu_stats'])
 
-    output += '\tMemory: %.2f %% (%.2f GB of %.0f GB)\n' % (instance['memory_stats'][
-        'percentage'], instance['memory_stats']['used'] / 1048576.0, instance[
-            'memory_stats']['total'] / 1048576.0)
-    graphite += 'Memory - %s=%.2f;90;95;0;100 ' % (instance['name'], instance['memory_stats']['percentage'])
+        output += '\tMemory: %.2f %% (%.2f GB of %.0f GB)\n' % (instance['memory_stats'][
+            'percentage'], instance['memory_stats']['used'] / 1048576.0, instance[
+                'memory_stats']['total'] / 1048576.0)
+        graphite += 'Memory - %s=%.2f;90;95;0;100 ' % (instance['name'], instance['memory_stats']['percentage'])
 
-    output += '\tDISK:\n'
-    iops_cons = 0
-    for disk_name, disk in instance['disk_stats'].items():
-        iops = (disk['read_ops'] + disk['write_ops']) / (disk['time'])
-        iops_cons += iops
-        output += '\t  %s: %.2f IOPS, %.2f kB/s (read), %.2f kB/s (write)\n' % (
-            disk_name, (disk['read_ops'] + disk['write_ops']) / (disk['time']),
-            disk['read_bytes'] / (1024.0 * disk['time']), disk['write_bytes'] / (
-                1024.0 * disk['time']))
-    graphite += 'Disk - %s=%.2f;;;; ' % (instance['name'], iops_cons)
+        output += '\tDISK:\n'
+        iops_cons = 0
+        for disk_name, disk in instance['disk_stats'].items():
+            iops = (disk['read_ops'] + disk['write_ops']) / (disk['time'])
+            iops_cons += iops
+            output += '\t  %s: %.2f IOPS, %.2f kB/s (read), %.2f kB/s (write)\n' % (
+                disk_name, (disk['read_ops'] + disk['write_ops']) / (disk['time']),
+                disk['read_bytes'] / (1024.0 * disk['time']), disk['write_bytes'] / (
+                    1024.0 * disk['time']))
+        graphite += 'Disk - %s=%.2f;;;; ' % (instance['name'], iops_cons)
 
-    output += '\tINTERFACE:\n'
-    kbps_cons = 0
-    for interface_name, interface in instance['interface_stats'].items():
-        kbps = (interface['rx_bytes'] + interface['tx_bytes']) / (interface['time'] * 1024.0)
-        kbps_cons += kbps
-        output += '\t  %s: %.2f kB/s, %.2f pkts/s (read), %.2f pkts/s (write)\n' % (
-            interface_name, kbps, interface['rx_packets'] / interface['time'],
-            interface['tx_packets'] / interface['time'])
-    graphite += 'Interface - %s=%.2f;;;; ' % (instance['name'], kbps_cons)
+        output += '\tINTERFACE:\n'
+        kbps_cons = 0
+        for interface_name, interface in instance['interface_stats'].items():
+            kbps = (interface['rx_bytes'] + interface['tx_bytes']) / (interface['time'] * 1024.0)
+            kbps_cons += kbps
+            output += '\t  %s: %.2f kB/s, %.2f pkts/s (read), %.2f pkts/s (write)\n' % (
+                interface_name, kbps, interface['rx_packets'] / interface['time'],
+                interface['tx_packets'] / interface['time'])
+        graphite += 'Interface - %s=%.2f;;;; ' % (instance['name'], kbps_cons)
 
-print firstLine + ' | ' + graphite + output
+    print firstLine + ' | ' + graphite + output
 
-if instance_running_count == 0:
-    return STATUS_ERROR
-if instance_running_count < instance_count:
-    return STATUS_WARNING
-return STATUS_OK
+    if instance_running_count == instance_count:
+        return STATUS_OK
+    if instance_running_count == 0:
+        return STATUS_ERROR
+    if instance_running_count < instance_count:
+        return STATUS_WARNING
+
+if __name__ == '__main__':
+    sys.exit(main())
