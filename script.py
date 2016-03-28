@@ -9,6 +9,12 @@ import os
 import time
 from xml.etree import ElementTree as etree
 
+# nagios exit code
+STATUS_OK = 0
+STATUS_WARNING = 1
+STATUS_ERROR = 2
+STATUS_UNKNOWN = 3
+
 domainstate = {}
 domainstate['0'] = 'NOSTATE'
 domainstate['1'] = 'RUNNING'
@@ -252,7 +258,9 @@ for instance in conn.listAllDomains():
     stats_all[uuid] = inst
 
 
-firstLine = 'Number of Instances: %d' % len(stats_all)
+instance_count = len(stats_all)
+instance_running_count = 0
+firstLine = 'Number of Instances: %d' % instance_count
 output = ''
 graphite = ''
 for uuid, instance in stats_all.items():
@@ -262,6 +270,7 @@ for uuid, instance in stats_all.items():
                                               domainstate[domainstate[str(instance['state'])]][str(instance['reason'])])
     if instance['state'] != 1:
         continue
+    instance_running_count += 1
     output += '\tCPU: %.2f %%    VCPUs: %s\n' % (instance['cpu_stats'], instance['vcpus'])
     graphite += 'CPU - %s=%.2f;90;95;0;100 ' % (instance['name'], instance['cpu_stats'])
 
@@ -292,3 +301,9 @@ for uuid, instance in stats_all.items():
     graphite += 'Interface - %s=%.2f;;;; ' % (instance['name'], kbps_cons)
 
 print firstLine + ' | ' + graphite + output
+
+if instance_running_count == 0:
+    return STATUS_ERROR
+if instance_running_count < instance_count:
+    return STATUS_WARNING
+return STATUS_OK
