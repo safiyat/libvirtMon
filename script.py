@@ -274,12 +274,12 @@ def main():
             continue
         instance_running_count += 1
         output += '\tCPU: %.2f %%    VCPUs: %s\n' % (instance['cpu_stats'], instance['vcpus'])
-        graphite += 'CPU - %s=%.2f;90;95;0;100 ' % (instance['name'], instance['cpu_stats'])
+        graphite += 'CPU in %% - %s=%.2f;90;95;0;100 ' % (instance['name'], instance['cpu_stats'])
 
         output += '\tMemory: %.2f %% (%.2f GB of %.0f GB)\n' % (instance['memory_stats'][
             'percentage'], instance['memory_stats']['used'] / 1048576.0, instance[
                 'memory_stats']['total'] / 1048576.0)
-        graphite += 'Memory - %s=%.2f;90;95;0;100 ' % (instance['name'], instance['memory_stats']['percentage'])
+        graphite += 'Memory in %% - %s=%.2f;90;95;0;100 ' % (instance['name'], instance['memory_stats']['percentage'])
 
         output += '\tDISK:\n'
         iops_cons = 0
@@ -290,7 +290,7 @@ def main():
                 disk_name, (disk['read_ops'] + disk['write_ops']) / (disk['time']),
                 disk['read_bytes'] / (1024.0 * disk['time']), disk['write_bytes'] / (
                     1024.0 * disk['time']))
-        graphite += 'Disk - %s=%.2f;;;; ' % (instance['name'], iops_cons)
+        graphite += 'Disk in IOPS - %s=%.2f;;;; ' % (instance['name'], iops_cons)
 
         output += '\tINTERFACE:\n'
         kbps_cons = 0
@@ -300,7 +300,7 @@ def main():
             output += '\t  %s: %.2f kB/s, %.2f pkts/s (read), %.2f pkts/s (write)\n' % (
                 interface_name, kbps, interface['rx_packets'] / interface['time'],
                 interface['tx_packets'] / interface['time'])
-        graphite += 'Interface - %s=%.2f;;;; ' % (instance['name'], kbps_cons)
+        graphite += 'Interface in kBps - %s=%.2f;;;; ' % (instance['name'], kbps_cons)
 
     print firstLine + ' | ' + graphite + output
 
